@@ -131,7 +131,7 @@
       PSI_STEPS: 100,
       SINGULAR: 1e-10,
       DZ: 1e-8,
-      BOUNDS: [-10, 10],
+      BOUNDS: [-2, 2],  // FIXED: Reduced from [-10, 10]
       NEWTON_TOL: 1e-10,
       NEWTON_MAX_ITER: 100
     };
@@ -159,11 +159,12 @@
         const x = Math.pow(1 - prof.unstable.am * z, 0.25);
         return 2 * Math.log((1 + x) / 2) + Math.log((1 + x * x) / 2) - 2 * Math.atan(x) + Math.PI / 2;
       }
+      // FIXED: Use midpoint rule instead of endpoint
       const steps = NUM.PSI_STEPS, dz = z / steps;
       let sum = 0;
-      for (let i = 1; i <= steps; i++) {
-        const zi = i * dz;
-        sum += (1 / phi_m(zi, p) - 1) * dz;
+      for (let i = 0; i < steps; i++) {
+        const zmid = (i + 0.5) * dz;  // Midpoint: (i + 0.5) * dz
+        sum += (1 / phi_m(zmid, p) - 1) * dz;
       }
       return sum;
     };
@@ -175,11 +176,12 @@
         const y = Math.pow(1 - prof.unstable.ah * z, 0.5);
         return 2 * Math.log((1 + y) / 2);
       }
+      // FIXED: Use midpoint rule instead of endpoint
       const steps = NUM.PSI_STEPS, dz = z / steps;
       let sum = 0;
-      for (let i = 1; i <= steps; i++) {
-        const zi = i * dz;
-        sum += (1 / phi_h(zi, p) - 1) * dz;
+      for (let i = 0; i < steps; i++) {
+        const zmid = (i + 0.5) * dz;  // Midpoint: (i + 0.5) * dz
+        sum += (1 / phi_h(zmid, p) - 1) * dz;
       }
       return sum;
     };
@@ -232,9 +234,10 @@
     // --- Data Generation and D3 Charting ---
     function generateReferenceData(profile, regime) {
       let zetaRange = [];
-      if (regime === 'unstable') zetaRange = d3.range(-10, 0.01, 0.1);
-      else if (regime === 'stable') zetaRange = d3.range(0.01, 10.01, 0.1);
-      else zetaRange = d3.range(-10, 10.01, 0.1);
+      // FIXED: Use ±2 range with 0.02 step for smoother curves
+      if (regime === 'unstable') zetaRange = d3.range(-2, 0.01, 0.02);
+      else if (regime === 'stable') zetaRange = d3.range(0.01, 2.01, 0.02);
+      else zetaRange = d3.range(-2, 2.01, 0.02);
 
       return zetaRange.map(z => {
         const pm = phi_m(z, profile);
@@ -328,13 +331,21 @@
           .attr('d', line);
       });
 
-      // Legend
+      // Legend - FIXED: line segments instead of rects, consistent spacing
       const legend = svg.append('g').attr('class', 'legend')
         .attr('transform', `translate(${width - margin.right + 10}, ${margin.top})`);
       series.forEach((s, i) => {
         const g = legend.append('g').attr('transform', `translate(0, ${i * 22})`);
-        g.append('rect').attr('width', 14).attr('height', 14).attr('fill', s.color);
-        g.append('text').attr('x', 18).attr('y', 11).text(s.label).style('font-size', '13px');
+        g.append('line')
+          .attr('x1', 0).attr('x2', 22)
+          .attr('y1', 8).attr('y2', 8)
+          .attr('stroke', s.color)
+          .attr('stroke-width', 3);
+        g.append('text')
+          .attr('x', 28).attr('y', 12)
+          .text(s.label)
+          .style('font-size', '13px')
+          .attr('fill', '#333');
       });
     }
 

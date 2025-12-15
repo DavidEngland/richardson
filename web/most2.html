@@ -63,6 +63,15 @@
     </p>
   </section>
 
+  <section>
+    <h2>🔬 Curvature Diagnostics (Advanced)</h2>
+    <label>ζ for Curvature Analysis
+      <input id="curvInput" type="number" step="0.01" value="0.5"/>
+    </label>
+    <button id="curvAnalyze">Analyze Curvature</button>
+    <pre id="curvOutput" class="mono">Curvature results will appear here...</pre>
+  </section>
+
   <div class="chart-container">
     <div class="chart-title">ζ vs Richardson Numbers (\(\text{Ri}_g\) and \(\text{Ri}_b\))</div>
     <div id="chart_richardson"></div>
@@ -89,7 +98,7 @@
         stable: { bm:6.1, bh:6.1, cm:5.3, ch:5.3 }
       }
     };
-    const NUM = { PSI_STEPS:100, SINGULAR:1e-10, DZ:1e-8, BOUNDS:[-10, 10] };
+    const NUM = { PSI_STEPS:100, SINGULAR:1e-10, DZ:1e-8, BOUNDS:[-2, 2] };  // FIXED: Changed from [-10, 10]
     const SURFACE = { Z_OVER_Z0: 1000 };
 
     // Stability Functions (φ) - No change needed here
@@ -184,10 +193,16 @@
     function generateReferenceData(profile, regime) {
       let zetaRange = [];
 
-      // FIX: Excluding zeta=0 to prevent plotting artifact and singularity
-      if (regime === 'unstable') zetaRange = d3.range(-10, -0.0001, 0.1);
-      else if (regime === 'stable') zetaRange = d3.range(0.0001, 10.0001, 0.1);
-      else zetaRange = d3.range(-10, -0.0001, 0.1).concat(d3.range(0.0001, 10.0001, 0.1));
+      if (regime === 'unstable') {
+        // Unstable: -2 to -0.0001 with step 0.02
+        zetaRange = d3.range(-2, -0.0001, 0.02);
+      } else if (regime === 'stable') {
+        // Stable: 0.0001 to 2 with step 0.02
+        zetaRange = d3.range(0.0001, 2.0001, 0.02);
+      } else {
+        // Full: -2 to +2
+        zetaRange = d3.range(-2, -0.0001, 0.02).concat(d3.range(0.0001, 2.0001, 0.02));
+      }
 
       return zetaRange.map(z => {
         const pm = phi_m(z, profile);
@@ -277,24 +292,18 @@
           .attr('d', line);
       });
 
-      // Legend - FIXED: Use colored lines instead of rects
+      // Legend - FIXED: use colored line segments
       const legend = svg.append('g').attr('class', 'legend')
         .attr('transform', `translate(${width - margin.right - 120}, ${margin.top})`);
       series.forEach((s, i) => {
         const g = legend.append('g').attr('transform', `translate(0, ${i * 18})`);
-        
-        // Draw colored line segment (not invisible rect)
         g.append('line')
-          .attr('x1', 0)
-          .attr('x2', 20)
-          .attr('y1', 6)
-          .attr('y2', 6)
+          .attr('x1', 0).attr('x2', 20)
+          .attr('y1', 7).attr('y2', 7)
           .attr('stroke', s.color)
           .attr('stroke-width', 3);
-        
         g.append('text')
-          .attr('x', 24)
-          .attr('y', 10)
+          .attr('x', 26).attr('y', 11)
           .text(s.label)
           .style('font-size', '12px')
           .attr('fill', '#333');
@@ -328,7 +337,10 @@
       output: document.getElementById('output'),
       refresh: document.getElementById('refresh'),
       csv: document.getElementById('csv'),
-      convert: document.getElementById('convert')
+      convert: document.getElementById('convert'),
+      curvAnalyze: document.getElementById('curvAnalyze'),
+      curvInput: document.getElementById('curvInput'),
+      curvOutput: document.getElementById('curvOutput')
     };
 
     let currentData = [];
@@ -390,6 +402,26 @@
       } catch (e) {
         els.output.textContent = `Conversion failed: ${e.message}`;
       }
+    };
+
+    // Add curvature analysis handler
+    els.curvAnalyze.onclick = () => {
+      const zeta = parseFloat(els.curvInput.value);
+      if (Number.isNaN(zeta)) {
+        els.curvOutput.textContent = 'Invalid input';
+        return;
+      }
+
+      const prof = els.profile.value;
+      const result = window.MOST.classify_stability(zeta, prof);
+
+      els.curvOutput.textContent = JSON.stringify({
+        zeta: zeta.toFixed(4),
+        Ri_g: window.MOST.ri_g(zeta, prof).toFixed(6),
+        curvature: result.curvature.toFixed(8),
+        regime: result.regime,
+        interpretation: result.interpretation
+      }, null, 2);
     };
 
     // Initial render

@@ -147,9 +147,9 @@
       <div>
         <label for="regime">Stability Regime</label>
         <select id="regime">
-          <option value="full">Full (-10 to 10)</option>
-          <option value="unstable">Unstable (-10 to 0)</option>
-          <option value="stable">Stable (0 to 10)</option>
+          <option value="full">Full (-2 to 2)</option>
+          <option value="unstable">Unstable (-2 to 0)</option>
+          <option value="stable">Stable (0 to 2)</option>
         </select>
       </div>
       <div>
@@ -238,7 +238,7 @@
       PSI_STEPS: 100,
       SINGULAR: 1e-10,
       DZ: 1e-8,
-      BOUNDS: [-10, 10],
+      BOUNDS: [-2, 2], // FIXED: Reduced from [-10, 10] to [-2, 2] for better visualization
       NEWTON_TOL: 1e-10,
       NEWTON_MAX_ITER: 100,
       RI_CRIT: 0.25 // Critical Richardson number for turbulence suppression
@@ -422,14 +422,16 @@
     function generateReferenceData(profile, regime) {
       let zetaRange = [];
       if (regime === 'unstable') {
-        zetaRange = d3.range(-10, -0.0001, 0.1);
+        // Unstable: -2 to -0.0001 with step 0.02
+        zetaRange = d3.range(-2, -0.0001, 0.02);
       } else if (regime === 'stable') {
-        zetaRange = d3.range(0.0001, 10.0001, 0.1);
+        // Stable: 0.0001 to 2 with step 0.02
+        zetaRange = d3.range(0.0001, 2.0001, 0.02);
       } else {
-        // FIXED: Avoid exact zero to prevent ψ derivative artifacts
+        // Full: -2 to +2
         zetaRange = [
-          ...d3.range(-10, -0.0001, 0.1),
-          ...d3.range(0.0001, 10.0001, 0.1)
+          ...d3.range(-2, -0.0001, 0.02),
+          ...d3.range(0.0001, 2.0001, 0.02)
         ];
       }
 
@@ -521,14 +523,22 @@
           .attr('d', line);
       });
 
-      // Legend
+      // Legend - FIXED: line segments with matching stroke colors
       const legend = svg.append('g')
         .attr('transform', `translate(${width - margin.right + 10}, ${margin.top})`);
       series.forEach((s, i) => {
         const g = legend.append('g').attr('transform', `translate(0, ${i * 20})`);
-        g.append('line').attr('x1', 0).attr('x2', 20).attr('y1', 6).attr('y2', 6)
-          .attr('stroke', s.color).attr('stroke-width', 2);
-        g.append('text').attr('x', 25).attr('y', 10).text(s.label).style('font-size', '12px');
+        g.append('line')
+          .attr('x1', 0).attr('x2', 20)
+          .attr('y1', 7).attr('y2', 7)
+          .attr('stroke', s.color)
+          .attr('stroke-width', 3);
+        g.append('text')
+          .attr('x', 26)
+          .attr('y', 11)
+          .text(s.label)
+          .style('font-size', '12px')
+          .attr('fill', '#333');
       });
     }
 
