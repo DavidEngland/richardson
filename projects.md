@@ -58,7 +58,7 @@ Build canonical, error-controlled tables and visualizations for gradient vs. bul
 - Analytical uncertainty bounds
 
 **Deliverables:**
-- ✅ Web tool (MOST.js)
+- ✅ Web tool (MOST.js) — fully documented
 - [ ] Published reference tables (figure + data archive)
 - [ ] Python package (`richardson`)
 - [ ] Jupyter tutorial: "MOST Fundamentals"
@@ -211,7 +211,7 @@ Current models struggle with:
 
 | Metric | Target | Status |
 |--------|--------|--------|
-| MOST tool live (beta) | Jan 2024 | ✅ In progress |
+| MOST tool live + documented | Jan 2024 | ✅ Complete |
 | Reference tables published | Mar 2024 | 📅 Planned |
 | Python package (PyPI) | Jun 2024 | 📅 Planned |
 | First journal paper | Sep 2024 | 📅 Target |
@@ -223,18 +223,18 @@ Current models struggle with:
 ## 📚 Relevant Literature
 
 **Foundational MOST papers:**
-- Monin & Obukhov (1954): Dimensionless characteristics of turbulence in the ground layer
-- Businger et al. (1971): Flux-profile relationships
-- Högström (1988): Spectral and coherence analysis
-- Cheng & Brutsaert (2005): Logarithmic mean wind & temperature profiles
+- Monin & Obukhov (1954): Dimensionless characteristics of turbulence in the ground layer. *Acta Geophys. Pol.*, 2, 151–161.
+- Businger et al. (1971): Flux-profile relationships in the atmospheric surface layer. *J. Atmos. Sci.*, 28, 181–189.
+- Högström (1988): Non-dimensional wind and temperature profiles in the atmospheric boundary layer. *Boundary-Layer Meteor.*, 44, 25–60.
+- Cheng & Brutsaert (2005): Flux-profile relationships for wind and temperature in the stable atmospheric boundary layer. *J. Atmos. Sci.*, 62, 2112–2132.
 
 **ABL bias in climate models:**
-- Medeiros et al. (2011): CESM ABL biases
-- Hourdin et al. (2013): The Atmospheric Model Intercomparison Project (AMIP)
+- Medeiros et al. (2011): Clouds and circulation responses to Arctic sea ice loss. *J. Climate*, 24, 5697–5714.
+- Hourdin et al. (2013): The Atmospheric Model Intercomparison Project (AMIP). *Bull. Amer. Meteor. Soc.*, 94, 213–228.
 
 **ML-Physics integration:**
-- Raissi et al. (2019): Physics-informed neural networks (PINNs)
-- Beucler et al. (2021): Enforcing constraints in neural networks for climate modeling
+- Raissi et al. (2019): Physics-informed neural networks: A deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations. *J. Comput. Phys.*, 378, 686–707.
+- Beucler et al. (2021): Enforcing analytic constraints in neural networks emulating steady geophysical flows. *Phys. Rev. Fluids*, 6, 084605.
 
 ---
 
