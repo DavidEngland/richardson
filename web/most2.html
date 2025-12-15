@@ -6,11 +6,13 @@
   <title>MOST Stability Tool (Enhanced)</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.css">
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <!-- MathJax for LaTeX rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
   <style>
     .chart-container { margin: 1rem 0; }
     .chart-title { font-weight: 600; margin: 0.5rem 0; }
     .legend { font: 12px sans-serif; }
-    .legend rect { stroke: #ccc; fill: none; }
+    .legend line { stroke-width: 3; } /* Make legend lines thicker */
     .axis-label { font: 12px sans-serif; }
     svg { max-width: 100%; height: auto; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
@@ -57,17 +59,17 @@
     <button id="convert">Convert</button>
     <pre id="output" class="mono">Results will appear here...</pre>
     <p>
-      Note: $\text{Ri}_b$ conversion uses a fixed $\ln(z/z_0) = \ln(1000) \approx 6.91$ term, corresponding to bulk wind referenced to $U(z_0)=0$.
+      Note: \(\text{Ri}_b\) conversion uses a fixed \(\ln(z/z_0) = \ln(1000) \approx 6.91\) term, corresponding to bulk wind referenced to \(U(z_0)=0\).
     </p>
   </section>
 
   <div class="chart-container">
-    <div class="chart-title">ζ vs Richardson Numbers ($\text{Ri}_g$ and $\text{Ri}_b$)</div>
+    <div class="chart-title">ζ vs Richardson Numbers (\(\text{Ri}_g\) and \(\text{Ri}_b\))</div>
     <div id="chart_richardson"></div>
   </div>
 
   <div class="chart-container">
-    <div class="chart-title">ζ vs Transfer Coefficients ($\phi_{C,m}$ and $\phi_{C,h}$)</div>
+    <div class="chart-title">ζ vs Transfer Coefficients (\(\phi_{C,m}\) and \(\phi_{C,h}\))</div>
     <div id="chart_transfer"></div>
   </div>
 
@@ -275,13 +277,27 @@
           .attr('d', line);
       });
 
-      // Legend
+      // Legend - FIXED: Use colored lines instead of rects
       const legend = svg.append('g').attr('class', 'legend')
         .attr('transform', `translate(${width - margin.right - 120}, ${margin.top})`);
       series.forEach((s, i) => {
         const g = legend.append('g').attr('transform', `translate(0, ${i * 18})`);
-        g.append('rect').attr('width', 12).attr('height', 12).attr('fill', s.color);
-        g.append('text').attr('x', 16).attr('y', 10).text(s.label);
+        
+        // Draw colored line segment (not invisible rect)
+        g.append('line')
+          .attr('x1', 0)
+          .attr('x2', 20)
+          .attr('y1', 6)
+          .attr('y2', 6)
+          .attr('stroke', s.color)
+          .attr('stroke-width', 3);
+        
+        g.append('text')
+          .attr('x', 24)
+          .attr('y', 10)
+          .text(s.label)
+          .style('font-size', '12px')
+          .attr('fill', '#333');
       });
     }
 

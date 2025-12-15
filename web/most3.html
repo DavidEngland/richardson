@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MOST Stability Tool</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.css">
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <!-- MathJax for LaTeX rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <style>
+    body { max-width: 1200px; }
+    .chart-container { margin: 2rem 0; padding: 1rem; background: var(--background-alt); border-radius: 8px; }
+    .chart-title { font-weight: 600; margin: 0 0 1rem 0; font-size: 1.1rem; }
+    .legend { font: 12px sans-serif; }
+    .legend rect { stroke: #ccc; fill: none; }
+    .axis-label { font: 12px sans-serif; }
+    svg { max-width: 100%; height: auto; }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      background: var(--background);
+      padding: 1rem;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 1rem 0; }
+    .control-group { display: flex; flex-direction: column; }
+    .button-group { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; }
+    .info-box {
+      background: var(--background-alt);
+      padding: 1rem;
+      border-radius: 4px;
+      margin: 1rem 0;
+      border-left: 4px solid var(--links);
+    }
+    .grid line { stroke: #e0e0e0; stroke-opacity: 0.7; }
+    .error { color: #d32f2f; font-weight: 600; }
+    .success { color: #388e3c; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>MOST Stability Tool</h1>
+  <p>Canonical Monin-Obukhov Similarity Theory Conversions</p>
+
+  <div class="info-box">
+    <strong>Parameters:</strong> ζ = z/L (stability parameter), \(\text{Ri}_g\) (gradient Richardson),
+    \(\text{Ri}_b\) (bulk Richardson), \(\phi_m\) (momentum), \(\phi_h\) (heat)
+  </div>
+
+  <section>
+    <h2>📊 Reference Chart Generation</h2>
+    <div class="controls">
+      <div class="control-group">
+        <label>Profile Formulation</label>
+        <select id="profile">
+          <option value="BD71">Businger-Dyer 1971</option>
+          <option value="HOG88">Högström 1988</option>
+          <option value="CB05">Cheng-Brutsaert 2005</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>Stability Regime</label>
+        <select id="regime">
+          <option value="full">Full Range (-10 to 10)</option>
+          <option value="unstable">Unstable (-10 to 0)</option>
+          <option value="stable">Stable (0 to 10)</option>
+        </select>
+      </div>
+    </div>
+    <div class="button-group">
+      <button id="refresh">🔄 Refresh Charts</button>
+      <button id="csv">💾 Export CSV</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>🔄 Parameter Conversion</h2>
+    <div class="controls">
+      <div class="control-group">
+        <label>Conversion Mode</label>
+        <select id="mode">
+          <option value="rig_to_zeta">Ri_g → ζ (and Ri_b)</option>
+          <option value="rib_to_zeta">Ri_b → ζ (and Ri_g)</option>
+          <option value="zeta_to_all">ζ → All Parameters</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>Input Value</label>
+        <input id="input" type="number" step="0.001" value="0.1" placeholder="Enter value"/>
+      </div>
+    </div>
+    <div class="button-group">
+      <button id="convert">▶️ Convert</button>
+      <button id="clearOutput">🗑️ Clear</button>
+    </div>
+    <pre id="output" class="mono">Results will appear here...</pre>
+    <div class="info-box">
+      <small><strong>Note:</strong> \(\text{Ri}_b\) conversion uses \(\ln(z/z_0) = \ln(1000) \approx 6.91\)</small>
+    </div>
+  </section>
+
+  <div class="chart-container">
+    <div class="chart-title">ζ vs Richardson Numbers (\(\text{Ri}_g\) and \(\text{Ri}_b\))</div>
+    <div id="chart_richardson"></div>
+  </div>
+
+  <div class="chart-container">
+    <div class="chart-title">ζ vs Stability Functions (\(\phi_m\) and \(\phi_h\))</div>
+    <div id="chart_phi"></div>
+  </div>
+
+  <script>
+    // --- Physics and Numerics ---
+    const profiles = {
+      BD71: {
+        unstable: { am: 16, ah: 16, bm: 0.25, bh: 0.5 },
+        stable: { bm: 5, bh: 5 }
+      },
+      HOG88: {
+        unstable: { am: 19.3, ah: 11.6, bm: 0.25, bh: 0.5 },
+        stable: { bm: 6, bh: 7.8 }
+      },
+      CB05: {
+        unstable: { am: 16, ah: 16, bm: 0.25, bh: 0.5 },
+        stable: { bm: 6.1, bh: 6.1, cm: 5.3, ch: 5.3 }
+      }
+    };
+
+    const NUM = {
+      PSI_STEPS: 100,
+      SINGULAR: 1e-10,
+      DZ: 1e-8,
+      BOUNDS: [-10, 10],
+      NEWTON_TOL: 1e-10,
+      NEWTON_MAX_ITER: 100
+    };
+
+    const SURFACE = { Z_OVER_Z0: 1000 };
+
+    const phi_m = (z, p) => {
+      const prof = profiles[p];
+      if (z < 0) return Math.pow(1 - prof.unstable.am * z, -prof.unstable.bm);
+      if (p === 'CB05') return 1 + prof.stable.bm * z + prof.stable.cm * z * z;
+      return 1 + prof.stable.bm * z;
+    };
+
+    const phi_h = (z, p) => {
+      const prof = profiles[p];
+      if (z < 0) return Math.pow(1 - prof.unstable.ah * z, -prof.unstable.bh);
+      if (p === 'CB05') return 1 + prof.stable.bh * z + prof.stable.ch * z * z;
+      return 1 + prof.stable.bh * z;
+    };
+
+    const psi_m = (z, p) => {
+      if (Math.abs(z) < NUM.SINGULAR) return 0;
+      const prof = profiles[p];
+      if (z < 0) {
+        const x = Math.pow(1 - prof.unstable.am * z, 0.25);
+        return 2 * Math.log((1 + x) / 2) + Math.log((1 + x * x) / 2) - 2 * Math.atan(x) + Math.PI / 2;
+      }
+      const steps = NUM.PSI_STEPS, dz = z / steps;
+      let sum = 0;
+      for (let i = 1; i <= steps; i++) {
+        const zi = i * dz;
+        sum += (1 / phi_m(zi, p) - 1) * dz;
+      }
+      return sum;
+    };
+
+    const psi_h = (z, p) => {
+      if (Math.abs(z) < NUM.SINGULAR) return 0;
+      const prof = profiles[p];
+      if (z < 0) {
+        const y = Math.pow(1 - prof.unstable.ah * z, 0.5);
+        return 2 * Math.log((1 + y) / 2);
+      }
+      const steps = NUM.PSI_STEPS, dz = z / steps;
+      let sum = 0;
+      for (let i = 1; i <= steps; i++) {
+        const zi = i * dz;
+        sum += (1 / phi_h(zi, p) - 1) * dz;
+      }
+      return sum;
+    };
+
+    const ri_g = (z, p) => {
+      const pm = phi_m(z, p), ph = phi_h(z, p);
+      return z * ph / (pm * pm);
+    };
+
+    const ri_b = (z, p) => {
+      if (Math.abs(z) < NUM.SINGULAR) return 0;
+      const ln_z_z0 = Math.log(SURFACE.Z_OVER_Z0);
+      if (!(ln_z_z0 > 0)) return 0;
+      const psim = psi_m(z, p), psih = psi_h(z, p);
+      const denom = Math.pow(ln_z_z0 - psim, 2);
+      return denom < 1e-15 ? 0 : z * (ln_z_z0 - psih) / denom;
+    };
+
+    const zeta_from_rig = (rig, p, guess = null) => {
+      if (guess === null) guess = rig > 0 ? 0.1 : (rig < 0 ? -0.1 : 0.0001);
+      let z = guess;
+      for (let i = 0; i < NUM.NEWTON_MAX_ITER; i++) {
+        const f = ri_g(z, p) - rig;
+        if (Math.abs(f) < NUM.NEWTON_TOL) return z;
+        const df = (ri_g(z + NUM.DZ, p) - ri_g(z - NUM.DZ, p)) / (2 * NUM.DZ);
+        if (Math.abs(df) < 1e-15) break;
+        const z_new = z - f / df;
+        z = Math.max(NUM.BOUNDS[0], Math.min(NUM.BOUNDS[1], z_new));
+        if (Math.abs(z_new - z) < NUM.NEWTON_TOL) return z;
+      }
+      return z;
+    };
+
+    const zeta_from_rib = (rib, p, guess = null) => {
+      if (guess === null) guess = rib > 0 ? 0.1 : (rib < 0 ? -0.1 : 0.0001);
+      let z = guess;
+      for (let i = 0; i < NUM.NEWTON_MAX_ITER; i++) {
+        if (Math.abs(z) < NUM.SINGULAR) z = NUM.SINGULAR;
+        const f = ri_b(z, p) - rib;
+        if (Math.abs(f) < NUM.NEWTON_TOL) return z;
+        const df = (ri_b(z + NUM.DZ, p) - ri_b(z - NUM.DZ, p)) / (2 * NUM.DZ);
+        if (Math.abs(df) < 1e-15) break;
+        const z_new = z - f / df;
+        z = Math.max(NUM.BOUNDS[0], Math.min(NUM.BOUNDS[1], z_new));
+        if (Math.abs(z_new - z) < NUM.NEWTON_TOL) return z;
+      }
+      return z;
+    };
+
+    // --- Data Generation and D3 Charting ---
+    function generateReferenceData(profile, regime) {
+      let zetaRange = [];
+      if (regime === 'unstable') zetaRange = d3.range(-10, 0.01, 0.1);
+      else if (regime === 'stable') zetaRange = d3.range(0.01, 10.01, 0.1);
+      else zetaRange = d3.range(-10, 10.01, 0.1);
+
+      return zetaRange.map(z => {
+        const pm = phi_m(z, profile);
+        const ph = phi_h(z, profile);
+        const rig = ri_g(z, profile);
+        const rib = ri_b(z, profile);
+        return {
+          zeta: +z.toFixed(4),
+          phi_m: +pm.toFixed(4),
+          phi_h: +ph.toFixed(4),
+          Ri_g: +rig.toFixed(4),
+          Ri_b: +rib.toFixed(4)
+        };
+      });
+    }
+
+    function drawLineChart(containerId, data, series, xLabel, yLabel) {
+      const container = d3.select(containerId);
+      container.selectAll('*').remove();
+
+      const width = Math.min(800, container.node().clientWidth || 800);
+      const height = 400;
+      const margin = { top: 20, right: 140, bottom: 60, left: 70 };
+
+      const svg = container.append('svg')
+        .attr('viewBox', `0 0 ${width} ${height}`);
+
+      const x = d3.scaleLinear()
+        .domain(d3.extent(data, d => d.zeta)).nice()
+        .range([margin.left, width - margin.right]);
+
+      const allY = [];
+      series.forEach(s => data.forEach(d => {
+        const v = d[s.key];
+        if (Number.isFinite(v)) allY.push(v);
+      }));
+      const y = d3.scaleLinear()
+        .domain(d3.extent(allY)).nice()
+        .range([height - margin.bottom, margin.top]);
+
+      // Grid
+      svg.append('g')
+        .attr('class', 'grid')
+        .attr('transform', `translate(${margin.left},0)`)
+        .call(d3.axisLeft(y).tickSize(-(width - margin.left - margin.right)).tickFormat(''));
+
+      svg.append('g')
+        .attr('class', 'grid')
+        .attr('transform', `translate(0,${height - margin.bottom})`)
+        .call(d3.axisBottom(x).tickSize(-(height - margin.top - margin.bottom)).tickFormat(''));
+
+      // Axes
+      const xAxis = g => g
+        .attr('transform', `translate(0,${height - margin.bottom})`)
+        .call(d3.axisBottom(x))
+        .call(g => g.append('text')
+          .attr('class', 'axis-label')
+          .attr('x', (width - margin.left - margin.right) / 2 + margin.left)
+          .attr('y', 40)
+          .attr('fill', 'currentColor')
+          .attr('text-anchor', 'middle')
+          .text(xLabel));
+
+      const yAxis = g => g
+        .attr('transform', `translate(${margin.left},0)`)
+        .call(d3.axisLeft(y))
+        .call(g => g.append('text')
+          .attr('class', 'axis-label')
+          .attr('x', -(height - margin.top - margin.bottom) / 2 - margin.top)
+          .attr('y', -50)
+          .attr('transform', 'rotate(-90)')
+          .attr('fill', 'currentColor')
+          .attr('text-anchor', 'middle')
+          .text(yLabel));
+
+      svg.append('g').call(xAxis);
+      svg.append('g').call(yAxis);
+
+      const line = d3.line()
+        .defined(d => Number.isFinite(d.value))
+        .x(d => x(d.zeta))
+        .y(d => y(d.value));
+
+      series.forEach(s => {
+        const seriesData = data.map(d => ({ zeta: d.zeta, value: d[s.key] }));
+        svg.append('path')
+          .datum(seriesData)
+          .attr('fill', 'none')
+          .attr('stroke', s.color)
+          .attr('stroke-width', 2)
+          .attr('d', line);
+      });
+
+      // Legend
+      const legend = svg.append('g').attr('class', 'legend')
+        .attr('transform', `translate(${width - margin.right + 10}, ${margin.top})`);
+      series.forEach((s, i) => {
+        const g = legend.append('g').attr('transform', `translate(0, ${i * 22})`);
+        g.append('rect').attr('width', 14).attr('height', 14).attr('fill', s.color);
+        g.append('text').attr('x', 18).attr('y', 11).text(s.label).style('font-size', '13px');
+      });
+    }
+
+    function exportCSV(rows) {
+      const headers = ['zeta', 'phi_m', 'phi_h', 'Ri_g', 'Ri_b'];
+      const prof = els.profile.value;
+      const reg = els.regime.value;
+      const csv = [
+        headers.join(','),
+        ...rows.map(r => headers.map(h => r[h]).join(','))
+      ].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `MOST_${prof}_${reg}_${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // --- UI Wiring ---
+    const els = {
+      profile: document.getElementById('profile'),
+      regime: document.getElementById('regime'),
+      mode: document.getElementById('mode'),
+      input: document.getElementById('input'),
+      output: document.getElementById('output'),
+      refresh: document.getElementById('refresh'),
+      csv: document.getElementById('csv'),
+      convert: document.getElementById('convert'),
+      clearOutput: document.getElementById('clearOutput')
+    };
+
+    let currentData = [];
+
+    function render() {
+      const prof = els.profile.value;
+      const reg = els.regime.value;
+      currentData = generateReferenceData(prof, reg);
+
+      drawLineChart('#chart_richardson', currentData, [
+        { key: 'Ri_g', color: '#1976d2', label: 'Ri_g (gradient)' },
+        { key: 'Ri_b', color: '#388e3c', label: 'Ri_b (bulk)' }
+      ], 'ζ = z/L', 'Richardson Number');
+
+      drawLineChart('#chart_phi', currentData, [
+        { key: 'phi_m', color: '#f57c00', label: 'φ_m (momentum)' },
+        { key: 'phi_h', color: '#7b1fa2', label: 'φ_h (heat)' }
+      ], 'ζ = z/L', 'Stability Function φ');
+    }
+
+    els.refresh.onclick = render;
+    els.profile.onchange = render;
+    els.regime.onchange = render;
+    els.csv.onclick = () => exportCSV(currentData);
+    els.clearOutput.onclick = () => { els.output.textContent = 'Results will appear here...'; };
+
+    els.convert.onclick = () => {
+      const prof = els.profile.value;
+      const mode = els.mode.value;
+      const val = parseFloat(els.input.value);
+
+      if (Number.isNaN(val)) {
+        els.output.innerHTML = '<span class="error">❌ Invalid input - please enter a number</span>';
+        return;
+      }
+
+      try {
+        let z, out;
+        const guess = val > 0 ? 0.1 : (val < 0 ? -0.1 : 0.0001);
+
+        if (mode === 'rig_to_zeta') {
+          z = zeta_from_rig(val, prof, guess);
+          out = {
+            'Ri_g (input)': val,
+            'ζ': z,
+            'Ri_b': ri_b(z, prof),
+            'φ_m': phi_m(z, prof),
+            'φ_h': phi_h(z, prof)
+          };
+        } else if (mode === 'rib_to_zeta') {
+          z = zeta_from_rib(val, prof, guess);
+          out = {
+            'Ri_b (input)': val,
+            'ζ': z,
+            'Ri_g': ri_g(z, prof),
+            'φ_m': phi_m(z, prof),
+            'φ_h': phi_h(z, prof)
+          };
+        } else {
+          z = val;
+          out = {
+            'ζ (input)': z,
+            'Ri_g': ri_g(z, prof),
+            'Ri_b': ri_b(z, prof),
+            'φ_m': phi_m(z, prof),
+            'φ_h': phi_h(z, prof)
+          };
+        }
+
+        const formattedOut = {};
+        for (const key in out) {
+          formattedOut[key] = parseFloat(out[key]).toFixed(6);
+        }
+
+        els.output.innerHTML = '<span class="success">✅ Conversion successful:</span>\n\n' +
+          JSON.stringify(formattedOut, null, 2);
+      } catch (e) {
+        els.output.innerHTML = `<span class="error">❌ Conversion failed: ${e.message}</span>`;
+      }
+    };
+
+    // Initial render
+    render();
+  </script>
+
+</body>
+</html>
