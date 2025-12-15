@@ -2,380 +2,636 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MOST Stability Tool (Standalone)</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.css">
-    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-    <style>
-        .chart-container {
-            margin: 1rem 0;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MOST Stability Tool (Standalone)</title>
+  <meta name="description" content="Canonical Monin-Obukhov Similarity Theory stability parameter conversions" />
 
-        .chart-title {
-            font-weight: 600;
-            margin: 0.5rem 0;
-        }
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.css">
+  <script src="https://d3js.org/d3.v7.min.js"></script>
 
-        .legend {
-            font: 12px sans-serif;
-        }
+  <style>
+    body {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
 
-        .legend rect {
-            stroke: #ccc;
-            fill: none;
-        }
+    .info-box {
+      background: #e3f2fd;
+      border-left: 4px solid #2196f3;
+      padding: 1rem;
+      margin: 1rem 0;
+      border-radius: 4px;
+    }
 
-        .axis-label {
-            font: 12px sans-serif;
-        }
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+    }
 
-        svg {
-            max-width: 100%;
-            height: auto;
-        }
+    .button-group {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
 
-        .mono {
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        }
-    </style>
+    .chart-container {
+      margin: 2rem 0;
+      padding: 1rem;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+
+    .chart-title {
+      font-weight: 600;
+      font-size: 1.1rem;
+      margin-bottom: 0.5rem;
+      color: #333;
+    }
+
+    .axis-label {
+      font: 12px sans-serif;
+      fill: #555;
+    }
+
+    svg {
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .mono {
+      font-family: monospace;
+      background: #f5f5f5;
+      padding: 1rem;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-size: 0.9rem;
+    }
+
+    .section-header {
+      border-bottom: 2px solid #2196f3;
+      padding-bottom: 0.5rem;
+      margin: 2rem 0 1rem 0;
+    }
+
+    .warning {
+      background: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 0.75rem;
+      margin: 1rem 0;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+
+    button {
+      cursor: pointer;
+      padding: 0.5rem 1rem;
+      border: none;
+      border-radius: 4px;
+      background: #2196f3;
+      color: white;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: #1976d2;
+    }
+
+    .error {
+      color: #d32f2f;
+      font-weight: 600;
+    }
+
+    .critical-line {
+      stroke: #ff4444;
+      stroke-width: 2;
+      stroke-dasharray: 5, 5;
+    }
+  </style>
 </head>
 
 <body>
+  <header>
     <h1>MOST Stability Tool (Standalone)</h1>
-    <p>Canonical Monin-Obukhov Stability Conversions (ζ, Ri_g, Ri_b, φ_m, φ_h)</p>
+    <p>Canonical Monin-Obukhov Similarity Theory stability parameter conversions</p>
+  </header>
 
-    <section>
-        <h2>Reference Chart Generation</h2>
-        <label>Profile
-            <select id="profile">
-                <option value="BD71">Businger-Dyer 1971</option>
-                <option value="HOG88">Högström 1988</option>
-                <option value="CB05">Cheng-Brutsaert 2005</option>
-            </select>
-        </label>
+  <div class="info-box">
+    <p><strong>About this tool:</strong> High-precision (10⁻¹⁰ tolerance) conversions between atmospheric boundary layer stability parameters.</p>
+    <ul>
+      <li><strong>ζ</strong> (zeta): Dimensionless height = z/L</li>
+      <li><strong>Ri_g</strong>: Gradient Richardson number (local)</li>
+      <li><strong>Ri_b</strong>: Bulk Richardson number (integrated, with U(z₀)=0)</li>
+      <li><strong>φ_m, φ_h</strong>: Stability functions</li>
+    </ul>
+    <p><em>No installation required—runs entirely in your browser!</em></p>
+  </div>
 
-        <label>Regime
-            <select id="regime">
-                <option value="full">Full (-10 to 10)</option>
-                <option value="unstable">Unstable (-10 to 0)</option>
-                <option value="stable">Stable (0 to 10)</option>
-            </select>
-        </label>
-
-        <button id="refresh">Refresh Charts</button>
-        <button id="csv">Export CSV</button>
-    </section>
-
-    <section>
-        <h2>Parameter Conversion</h2>
-        <label>Conversion
-            <select id="mode">
-                <option value="rig_to_zeta">Ri_g → ζ (and Ri_b)</option>
-                <option value="rib_to_zeta">Ri_b → ζ (and Ri_g)</option>
-                <option value="zeta_to_all">ζ → All</option>
-            </select>
-        </label>
-        <label>Input
-            <input id="input" type="number" step="0.001" value="0.1" />
-        </label>
-        <button id="convert">Convert</button>
-        <pre id="output" class="mono">Results will appear here...</pre>
-        <p>Note: Ri_b conversion uses a fixed $\ln(z/z_0) = \ln(1000) \approx 6.91$ term.</p>
-    </section>
-
-    <div class="chart-container">
-        <div class="chart-title">ζ vs Richardson Numbers ($\text{Ri}_g$ and $\text{Ri}_b$)</div>
-        <div id="chart_richardson"></div>
+  <section>
+    <h2 class="section-header">Reference Chart Generation</h2>
+    <div class="controls-grid">
+      <div>
+        <label for="profile">MOST Profile</label>
+        <select id="profile">
+          <option value="BD71">Businger-Dyer 1971</option>
+          <option value="HOG88">Högström 1988</option>
+          <option value="CB05">Cheng-Brutsaert 2005</option>
+        </select>
+      </div>
+      <div>
+        <label for="regime">Stability Regime</label>
+        <select id="regime">
+          <option value="full">Full (-10 to 10)</option>
+          <option value="unstable">Unstable (-10 to 0)</option>
+          <option value="stable">Stable (0 to 10)</option>
+        </select>
+      </div>
+      <div>
+        <label for="z_over_z0">z/z₀ Ratio</label>
+        <input id="z_over_z0" type="number" value="1000" min="1" step="100" />
+      </div>
     </div>
-
-    <div class="chart-container">
-        <div class="chart-title">ζ vs Stability Functions ($\phi_m$ and $\phi_h$)</div>
-        <div id="chart_phi"></div>
+    <div class="button-group">
+      <button id="refresh">🔄 Refresh Charts</button>
+      <button id="csv">💾 Export CSV</button>
     </div>
+    <div class="warning">
+      <strong>Note on Ri_b:</strong> Uses constant ln(z/z₀) term (default ln(1000) ≈ 6.91).
+      This corresponds to surface-layer bulk Richardson with U(z₀)=0. Adjust z/z₀ for site-specific roughness.
+    </div>
+  </section>
 
-    <script>
-        // --- Physics and Numerics ---
-        const profiles = {
-            // FIX: Changed '=' to ':' for object properties in HOG88 and CB05 blocks
-            BD71: { unstable: { am: 16, ah: 16, bm: 0.25, bh: 0.5 }, stable: { bm: 5, bh: 5 } },
-            HOG88: { unstable: { am: 19.3, ah: 11.6, bm: 0.25, bh: 0.5 }, stable: { bm: 6, bh: 7.8 } },
-            CB05: { unstable: { am: 16, ah: 16, bm: 0.25, bh: 0.5 }, stable: { bm: 6.1, bh: 6.1, cm: 5.3, ch: 5.3 } }
-        };
-        const NUM = { PSI_STEPS: 100, SINGULAR: 1e-10, DZ: 1e-8, BOUNDS: [-10, 10] };
-        const SURFACE = { Z_OVER_Z0: 1000 }; // Constant z/z0 ratio for Ri_b
+  <section>
+    <h2 class="section-header">Parameter Conversion</h2>
+    <div class="controls-grid">
+      <div>
+        <label for="mode">Conversion Type</label>
+        <select id="mode">
+          <option value="rig_to_zeta">Ri_g → ζ</option>
+          <option value="rib_to_zeta">Ri_b → ζ</option>
+          <option value="zeta_to_all">ζ → All</option>
+        </select>
+      </div>
+      <div>
+        <label for="input">Input Value</label>
+        <input id="input" type="number" step="0.001" value="0.1" />
+      </div>
+      <div style="display: flex; align-items: flex-end;">
+        <button id="convert" style="width: 100%;">🧮 Convert</button>
+      </div>
+    </div>
+    <label>Results</label>
+    <pre id="output" class="mono">Results will appear here...</pre>
+  </section>
 
-        const phi_m = (z, p) => {
-            const prof = profiles[p];
-            if (z < 0) return Math.pow(1 - prof.unstable.am * z, -prof.unstable.bm);
-            // Simplify logic since CB05 has cm/ch defined
-            if (p === 'CB05') return 1 + prof.stable.bm * z + prof.stable.cm * z * z;
-            return 1 + prof.stable.bm * z;
-        };
-        const phi_h = (z, p) => {
-            const prof = profiles[p];
-            if (z < 0) return Math.pow(1 - prof.unstable.ah * z, -prof.unstable.bh);
-            if (p === 'CB05') return 1 + prof.stable.bh * z + prof.stable.ch * z * z;
-            return 1 + prof.stable.bh * z;
-        };
+  <div class="chart-container">
+    <div class="chart-title">ζ vs Richardson Numbers (Ri_g and Ri_b)</div>
+    <div id="chart_richardson"></div>
+  </div>
 
-        // Integrated Stability Functions (Psi)
-        const psi_m = (z, p) => {
-            if (Math.abs(z) < NUM.SINGULAR) return 0;
-            const prof = profiles[p];
-            if (z < 0) {
-                // Unstable: Analytical solution
-                const x = Math.pow(1 - prof.unstable.am * z, 0.25);
-                return 2 * Math.log((1 + x) / 2) + Math.log((1 + x * x) / 2) - 2 * Math.atan(x) + Math.PI / 2;
-            }
-            // Stable: Numerical integration
-            const steps = NUM.PSI_STEPS, dz = z / steps; let sum = 0;
-            for (let i = 1; i <= steps; i++) { const zi = i * dz; sum += (1 / phi_m(zi, p) - 1) * dz; }
-            return sum;
-        };
-        const psi_h = (z, p) => {
-            if (Math.abs(z) < NUM.SINGULAR) return 0;
-            const prof = profiles[p];
-            if (z < 0) {
-                // Unstable: Analytical solution
-                const y = Math.pow(1 - prof.unstable.ah * z, 0.5); return 2 * Math.log((1 + y) / 2);
-            }
-            // Stable: Numerical integration
-            const steps = NUM.PSI_STEPS, dz = z / steps; let sum = 0;
-            for (let i = 1; i <= steps; i++) { const zi = i * dz; sum += (1 / phi_h(zi, p) - 1) * dz; }
-            return sum;
-        };
+  <div class="chart-container">
+    <div class="chart-title">ζ vs Stability Functions (φ_m and φ_h)</div>
+    <div id="chart_phi"></div>
+  </div>
 
-        // Richardson Numbers
-        const ri_g = (z, p) => { const pm = phi_m(z, p), ph = phi_h(z, p); return z * ph / (pm * pm); };
-        const ri_b = (z, p) => {
-            if (Math.abs(z) < NUM.SINGULAR) return 0;
-            // Fixed z/z0 term for bulk calculation
-            const ln_z_z0 = Math.log(SURFACE.Z_OVER_Z0);
-            if (!(ln_z_z0 > 0)) return 0; // Avoid issues if Z_OVER_Z0 is undefined/invalid
-            const psim = psi_m(z, p), psih = psi_h(z, p);
-            const denom = Math.pow(ln_z_z0 - psim, 2);
-            return denom < 1e-15 ? 0 : z * (ln_z_z0 - psih) / denom;
-        };
+  <footer style="margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid #ddd; color: #666; font-size: 0.9rem;">
+    <h3>References</h3>
+    <ul>
+      <li>Businger et al. (1971): J. Atmos. Sci., 28, 181–189</li>
+      <li>Högström (1988): Boundary-Layer Meteor., 44, 25–60</li>
+      <li>Cheng & Brutsaert (2005): J. Atmos. Sci., 62, 2112–2132</li>
+    </ul>
+    <p><a href="https://github.com/DavidEngland/richardson" target="_blank">github.com/DavidEngland/richardson</a></p>
+  </footer>
 
-        // Inversions (Newton's Method)
-        const zeta_from_rig = (rig, p, guess = 0.1) => {
-            let z = guess;
-            for (let i = 0; i < 100; i++) {
-                const f = ri_g(z, p) - rig;
-                if (Math.abs(f) < 1e-10) return z;
-                // Central difference derivative
-                const df = (ri_g(z + NUM.DZ, p) - ri_g(z - NUM.DZ, p)) / (2 * NUM.DZ);
-                if (Math.abs(df) < 1e-15) break;
-                z = Math.max(NUM.BOUNDS[0], Math.min(NUM.BOUNDS[1], z - f / df));
-            }
-            return z;
-        };
-        const zeta_from_rib = (rib, p, guess = 0.1) => {
-            let z = guess;
-            for (let i = 0; i < 100; i++) {
-                if (Math.abs(z) < NUM.SINGULAR) z = NUM.SINGULAR; // Avoid singularity near z=0
-                const f = ri_b(z, p) - rib;
-                if (Math.abs(f) < 1e-10) return z;
-                // Central difference derivative
-                const df = (ri_b(z + NUM.DZ, p) - ri_b(z - NUM.DZ, p)) / (2 * NUM.DZ);
-                if (Math.abs(df) < 1e-15) break;
-                z = Math.max(NUM.BOUNDS[0], Math.min(NUM.BOUNDS[1], z - f / df));
-            }
-            return z;
-        };
+  <script>
+    'use strict';
 
-        // --- Data Generation and D3 Charting ---
-        function generateReferenceData(profile, regime) {
-            let zetaRange = [];
-            // Generate points with a step of 0.1
-            if (regime === 'unstable') zetaRange = d3.range(-10, 0.0001, 0.1);
-            else if (regime === 'stable') zetaRange = d3.range(0.0001, 10.0001, 0.1); // Start slightly above 0 for stability
-            else zetaRange = d3.range(-10, 10.0001, 0.1);
+    // ========================================================================
+    // CONSTANTS: MOST PROFILE PARAMETERS (with ψ type flags)
+    // ========================================================================
+    const PROFILES = {
+      BD71: {
+        name: 'Businger-Dyer 1971',
+        unstable: { am: 16, ah: 16, bm: 0.25, bh: 0.5, psi_type: 'BD' },
+        stable: { bm: 5, bh: 5 }
+      },
+      HOG88: {
+        name: 'Högström 1988',
+        unstable: { am: 19.3, ah: 11.6, bm: 0.25, bh: 0.5, psi_type: 'BD' },
+        stable: { bm: 6, bh: 7.8 }
+      },
+      CB05: {
+        name: 'Cheng-Brutsaert 2005',
+        unstable: { am: 16, ah: 16, bm: 0.25, bh: 0.5, psi_type: 'BD' },
+        stable: { bm: 6.1, bh: 6.1, cm: 5.3, ch: 5.3 }
+      }
+    };
 
-            return zetaRange.map(z => {
-                const pm = phi_m(z, profile);
-                const ph = phi_h(z, profile);
-                const rig = ri_g(z, profile);
-                const rib = ri_b(z, profile); // Ri_b handled singularity inside function
-                return {
-                    zeta: +z.toFixed(4),
-                    phi_m: +pm.toFixed(4),
-                    phi_h: +ph.toFixed(4),
-                    Ri_g: +rig.toFixed(4),
-                    Ri_b: +rib.toFixed(4)
-                };
-            });
+    const NUMERICAL = {
+      PSI_STEPS: 100,
+      SINGULAR: 1e-10,
+      DZ: 1e-8,
+      BOUNDS: [-10, 10],
+      NEWTON_TOL: 1e-10,
+      NEWTON_MAX_ITER: 100,
+      RI_CRIT: 0.25 // Critical Richardson number for turbulence suppression
+    };
+
+    let SURFACE = { Z_OVER_Z0: 1000 };
+
+    // ========================================================================
+    // CORE PHYSICS: STABILITY FUNCTIONS
+    // ========================================================================
+    function phi_m(zeta, profile) {
+      const p = PROFILES[profile];
+      if (zeta < 0) {
+        return Math.pow(1 - p.unstable.am * zeta, -p.unstable.bm);
+      } else {
+        if (profile === 'CB05') {
+          return 1 + p.stable.bm * zeta + p.stable.cm * zeta * zeta;
+        }
+        return 1 + p.stable.bm * zeta;
+      }
+    }
+
+    function phi_h(zeta, profile) {
+      const p = PROFILES[profile];
+      if (zeta < 0) {
+        return Math.pow(1 - p.unstable.ah * zeta, -p.unstable.bh);
+      } else {
+        if (profile === 'CB05') {
+          return 1 + p.stable.bh * zeta + p.stable.ch * zeta * zeta;
+        }
+        return 1 + p.stable.bh * zeta;
+      }
+    }
+
+    // ========================================================================
+    // INTEGRAL STABILITY FUNCTIONS (IMPROVED)
+    // ========================================================================
+    function psi_m(zeta, profile) {
+      if (Math.abs(zeta) < NUMERICAL.SINGULAR) return 0;
+
+      const p = PROFILES[profile];
+      if (zeta < 0) {
+        // Unstable: Profile-specific analytical solutions
+        if (p.unstable.psi_type === 'BD') {
+          // Standard Businger-Dyer form (assumes bm=0.25)
+          const x = Math.pow(1 - p.unstable.am * zeta, 0.25);
+          return (
+            2 * Math.log((1 + x) / 2) +
+            Math.log((1 + x * x) / 2) -
+            2 * Math.atan(x) +
+            Math.PI / 2
+          );
+        }
+        // Future: Add Wilson, Kansas, etc.
+      } else {
+        // Stable: IMPROVED midpoint integration (better than rectangular)
+        const steps = NUMERICAL.PSI_STEPS;
+        const dz = zeta / steps;
+        let sum = 0;
+        for (let i = 0; i < steps; i++) {
+          const zmid = (i + 0.5) * dz; // Midpoint rule
+          sum += (1 / phi_m(zmid, profile) - 1) * dz;
+        }
+        return sum;
+      }
+    }
+
+    function psi_h(zeta, profile) {
+      if (Math.abs(zeta) < NUMERICAL.SINGULAR) return 0;
+
+      const p = PROFILES[profile];
+      if (zeta < 0) {
+        if (p.unstable.psi_type === 'BD') {
+          // Assumes bh=0.5
+          const y = Math.pow(1 - p.unstable.ah * zeta, 0.5);
+          return 2 * Math.log((1 + y) / 2);
+        }
+      } else {
+        // Stable: Midpoint integration
+        const steps = NUMERICAL.PSI_STEPS;
+        const dz = zeta / steps;
+        let sum = 0;
+        for (let i = 0; i < steps; i++) {
+          const zmid = (i + 0.5) * dz;
+          sum += (1 / phi_h(zmid, profile) - 1) * dz;
+        }
+        return sum;
+      }
+    }
+
+    // ========================================================================
+    // RICHARDSON NUMBERS
+    // ========================================================================
+    function ri_g(zeta, profile) {
+      const pm = phi_m(zeta, profile);
+      const ph = phi_h(zeta, profile);
+      return zeta * ph / (pm * pm);
+    }
+
+    function ri_b(zeta, profile) {
+      if (Math.abs(zeta) < NUMERICAL.SINGULAR) return 0;
+      const lnz = Math.log(SURFACE.Z_OVER_Z0);
+      if (!(lnz > 0)) return 0;
+      const psim = psi_m(zeta, profile);
+      const psih = psi_h(zeta, profile);
+      const denom = Math.pow(lnz - psim, 2);
+      return denom < 1e-15 ? 0 : zeta * (lnz - psih) / denom;
+    }
+
+    // ========================================================================
+    // ROBUST NEWTON INVERSION (with bracketing fallback)
+    // ========================================================================
+    function zeta_from_rig(rig_target, profile, initial_guess = 0.1) {
+      let zeta = initial_guess;
+      let lo = NUMERICAL.BOUNDS[0],
+        hi = NUMERICAL.BOUNDS[1];
+
+      for (let i = 0; i < NUMERICAL.NEWTON_MAX_ITER; i++) {
+        const f = ri_g(zeta, profile) - rig_target;
+        if (Math.abs(f) < NUMERICAL.NEWTON_TOL) return zeta;
+
+        const df = (ri_g(zeta + NUMERICAL.DZ, profile) - ri_g(zeta - NUMERICAL.DZ, profile)) / (2 * NUMERICAL.DZ);
+
+        if (Math.abs(df) < 1e-15) {
+          // Fallback: bisection step
+          zeta = 0.5 * (lo + hi);
+          continue;
         }
 
-        // Simple multi-series D3 line chart
-        function drawLineChart(containerId, data, series, xLabel, yLabel) {
-            const container = d3.select(containerId);
-            container.selectAll('*').remove();
+        const zeta_new = zeta - f / df;
 
-            const width = Math.min(700, container.node().clientWidth || 700);
-            const height = 300;
-            const margin = { top: 20, right: 20, bottom: 45, left: 60 };
+        // Update brackets
+        if (ri_g(zeta, profile) > rig_target) hi = zeta;
+        else lo = zeta;
 
-            const svg = container.append('svg')
-                .attr('viewBox', `0 0 ${width} ${height}`);
+        // Bounds check
+        if (zeta_new < NUMERICAL.BOUNDS[0] || zeta_new > NUMERICAL.BOUNDS[1] || !Number.isFinite(zeta_new)) {
+          zeta = 0.5 * (lo + hi); // Bisection fallback
+        } else {
+          zeta = zeta_new;
+        }
+      }
+      return zeta;
+    }
 
-            const x = d3.scaleLinear()
-                .domain(d3.extent(data, d => d.zeta)).nice()
-                .range([margin.left, width - margin.right]);
+    function zeta_from_rib(rib_target, profile, initial_guess = 0.1) {
+      let zeta = initial_guess;
+      let lo = NUMERICAL.BOUNDS[0],
+        hi = NUMERICAL.BOUNDS[1];
 
-            // Compute y domain across all series
-            const allY = [];
-            series.forEach(s => data.forEach(d => {
-                const v = d[s.key];
-                if (Number.isFinite(v)) allY.push(v);
-            }));
-            const y = d3.scaleLinear()
-                .domain(d3.extent(allY)).nice()
-                .range([height - margin.bottom, margin.top]);
+      for (let i = 0; i < NUMERICAL.NEWTON_MAX_ITER; i++) {
+        if (Math.abs(zeta) < NUMERICAL.SINGULAR) zeta = NUMERICAL.SINGULAR;
 
-            const xAxis = g => g
-                .attr('transform', `translate(0,${height - margin.bottom})`)
-                .call(d3.axisBottom(x))
-                .call(g => g.append('text')
-                    .attr('class', 'axis-label')
-                    .attr('x', (width - margin.left - margin.right) / 2 + margin.left)
-                    .attr('y', 35)
-                    .attr('fill', 'currentColor')
-                    .attr('text-anchor', 'middle')
-                    .text(xLabel));
+        const f = ri_b(zeta, profile) - rib_target;
+        if (Math.abs(f) < NUMERICAL.NEWTON_TOL) return zeta;
 
-            const yAxis = g => g
-                .attr('transform', `translate(${margin.left},0)`)
-                .call(d3.axisLeft(y))
-                .call(g => g.append('text')
-                    .attr('class', 'axis-label')
-                    .attr('x', - (height - margin.top - margin.bottom) / 2)
-                    .attr('y', -45)
-                    .attr('transform', 'rotate(-90)')
-                    .attr('fill', 'currentColor')
-                    .attr('text-anchor', 'middle')
-                    .text(yLabel));
+        const df = (ri_b(zeta + NUMERICAL.DZ, profile) - ri_b(zeta - NUMERICAL.DZ, profile)) / (2 * NUMERICAL.DZ);
 
-            svg.append('g').call(xAxis);
-            svg.append('g').call(yAxis);
-
-            const line = d3.line()
-                .defined(d => Number.isFinite(d.value))
-                .x(d => x(d.zeta))
-                .y(d => y(d.value));
-
-            series.forEach(s => {
-                const seriesData = data.map(d => ({ zeta: d.zeta, value: d[s.key] }));
-                svg.append('path')
-                    .datum(seriesData)
-                    .attr('fill', 'none')
-                    .attr('stroke', s.color)
-                    .attr('stroke-width', 1.5)
-                    .attr('d', line);
-            });
-
-            // Legend
-            const legend = svg.append('g').attr('class', 'legend')
-                .attr('transform', `translate(${width - margin.right - 120}, ${margin.top})`);
-            series.forEach((s, i) => {
-                const g = legend.append('g').attr('transform', `translate(0, ${i * 18})`);
-                g.append('rect').attr('width', 12).attr('height', 12).attr('fill', s.color);
-                g.append('text').attr('x', 16).attr('y', 10).text(s.label);
-            });
+        if (Math.abs(df) < 1e-15) {
+          zeta = 0.5 * (lo + hi);
+          continue;
         }
 
-        // CSV export
-        function exportCSV(rows) {
-            const headers = ['zeta', 'phi_m', 'phi_h', 'Ri_g', 'Ri_b'];
-            const prof = els.profile.value;
-            const reg = els.regime.value;
-            const csv = [
-                headers.join(','),
-                ...rows.map(r => headers.map(h => r[h]).join(','))
-            ].join('\n');
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `MOST_reference_${prof}_${reg}.csv`;
-            a.click();
-            URL.revokeObjectURL(url);
+        const zeta_new = zeta - f / df;
+
+        if (ri_b(zeta, profile) > rib_target) hi = zeta;
+        else lo = zeta;
+
+        if (zeta_new < NUMERICAL.BOUNDS[0] || zeta_new > NUMERICAL.BOUNDS[1] || !Number.isFinite(zeta_new)) {
+          zeta = 0.5 * (lo + hi);
+        } else {
+          zeta = zeta_new;
+        }
+      }
+      return zeta;
+    }
+
+    // ========================================================================
+    // DATA GENERATION (FIXED: exclude exact ζ=0)
+    // ========================================================================
+    function generateReferenceData(profile, regime) {
+      let zetaRange = [];
+      if (regime === 'unstable') {
+        zetaRange = d3.range(-10, -0.0001, 0.1);
+      } else if (regime === 'stable') {
+        zetaRange = d3.range(0.0001, 10.0001, 0.1);
+      } else {
+        // FIXED: Avoid exact zero to prevent ψ derivative artifacts
+        zetaRange = [
+          ...d3.range(-10, -0.0001, 0.1),
+          ...d3.range(0.0001, 10.0001, 0.1)
+        ];
+      }
+
+      return zetaRange.map(z => ({
+        zeta: +z.toFixed(4),
+        phi_m: +phi_m(z, profile).toFixed(4),
+        phi_h: +phi_h(z, profile).toFixed(4),
+        Ri_g: +ri_g(z, profile).toFixed(4),
+        Ri_b: +ri_b(z, profile).toFixed(4)
+      }));
+    }
+
+    // ========================================================================
+    // D3 CHARTING (with critical Ri markers)
+    // ========================================================================
+    function drawLineChart(containerId, data, series, xLabel, yLabel) {
+      const container = d3.select(containerId);
+      container.selectAll('*').remove();
+
+      const width = Math.min(700, container.node().clientWidth || 700);
+      const height = 300;
+      const margin = { top: 20, right: 120, bottom: 50, left: 70 };
+
+      const svg = container.append('svg').attr('viewBox', `0 0 ${width} ${height}`);
+
+      const x = d3.scaleLinear()
+        .domain(d3.extent(data, d => d.zeta)).nice()
+        .range([margin.left, width - margin.right]);
+
+      const allY = [];
+      series.forEach(s => data.forEach(d => { if (Number.isFinite(d[s.key])) allY.push(d[s.key]); }));
+      const y = d3.scaleLinear()
+        .domain(d3.extent(allY)).nice()
+        .range([height - margin.bottom, margin.top]);
+
+      // Axes
+      svg.append('g')
+        .attr('transform', `translate(0,${height - margin.bottom})`)
+        .call(d3.axisBottom(x))
+        .append('text')
+          .attr('class', 'axis-label')
+          .attr('x', (width - margin.left - margin.right) / 2 + margin.left)
+          .attr('y', 35)
+          .attr('text-anchor', 'middle')
+          .text(xLabel);
+
+      svg.append('g')
+        .attr('transform', `translate(${margin.left},0)`)
+        .call(d3.axisLeft(y))
+        .append('text')
+          .attr('class', 'axis-label')
+          .attr('x', -(height - margin.top - margin.bottom) / 2)
+          .attr('y', -50)
+          .attr('transform', 'rotate(-90)')
+          .attr('text-anchor', 'middle')
+          .text(yLabel);
+
+      // Critical Ri line (if applicable)
+      if (yLabel.includes('Richardson') && y.domain()[1] > NUMERICAL.RI_CRIT) {
+        svg.append('line')
+          .attr('class', 'critical-line')
+          .attr('x1', margin.left)
+          .attr('x2', width - margin.right)
+          .attr('y1', y(NUMERICAL.RI_CRIT))
+          .attr('y2', y(NUMERICAL.RI_CRIT));
+
+        svg.append('text')
+          .attr('x', width - margin.right - 5)
+          .attr('y', y(NUMERICAL.RI_CRIT) - 5)
+          .attr('text-anchor', 'end')
+          .attr('fill', '#ff4444')
+          .style('font-size', '10px')
+          .text('Ri_crit ≈ 0.25');
+      }
+
+      // Lines
+      const line = d3.line()
+        .defined(d => Number.isFinite(d.value))
+        .x(d => x(d.zeta))
+        .y(d => y(d.value));
+
+      series.forEach(s => {
+        const seriesData = data.map(d => ({ zeta: d.zeta, value: d[s.key] }));
+        svg.append('path')
+          .datum(seriesData)
+          .attr('fill', 'none')
+          .attr('stroke', s.color)
+          .attr('stroke-width', 2)
+          .attr('d', line);
+      });
+
+      // Legend
+      const legend = svg.append('g')
+        .attr('transform', `translate(${width - margin.right + 10}, ${margin.top})`);
+      series.forEach((s, i) => {
+        const g = legend.append('g').attr('transform', `translate(0, ${i * 20})`);
+        g.append('line').attr('x1', 0).attr('x2', 20).attr('y1', 6).attr('y2', 6)
+          .attr('stroke', s.color).attr('stroke-width', 2);
+        g.append('text').attr('x', 25).attr('y', 10).text(s.label).style('font-size', '12px');
+      });
+    }
+
+    function exportCSV(rows, profile, regime) {
+      const headers = ['zeta', 'phi_m', 'phi_h', 'Ri_g', 'Ri_b'];
+      const csv = [
+        `# MOST Reference Data: ${profile}, ${regime} regime`,
+        `# z/z0 = ${SURFACE.Z_OVER_Z0}`,
+        `# Improved midpoint ψ integration, profile-specific analyticals`,
+        headers.join(','),
+        ...rows.map(r => headers.map(h => r[h]).join(','))
+      ].join('\n');
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `MOST_${profile}_${regime}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // ========================================================================
+    // UI HANDLERS
+    // ========================================================================
+    const els = {
+      profile: document.getElementById('profile'),
+      regime: document.getElementById('regime'),
+      z_over_z0: document.getElementById('z_over_z0'),
+      mode: document.getElementById('mode'),
+      input: document.getElementById('input'),
+      output: document.getElementById('output'),
+      refresh: document.getElementById('refresh'),
+      csv: document.getElementById('csv'),
+      convert: document.getElementById('convert')
+    };
+
+    let currentData = [];
+
+    function render() {
+      const profile = els.profile.value;
+      const regime = els.regime.value;
+      const z_over_z0 = parseFloat(els.z_over_z0.value);
+      if (z_over_z0 > 0 && Number.isFinite(z_over_z0)) {
+        SURFACE.Z_OVER_Z0 = z_over_z0;
+      }
+
+      currentData = generateReferenceData(profile, regime);
+
+      drawLineChart('#chart_richardson', currentData, [
+        { key: 'Ri_g', color: '#2196f3', label: 'Ri_g' },
+        { key: 'Ri_b', color: '#4caf50', label: 'Ri_b' }
+      ], 'ζ = z/L', 'Richardson Number');
+
+      drawLineChart('#chart_phi', currentData, [
+        { key: 'phi_m', color: '#ff9800', label: 'φ_m' },
+        { key: 'phi_h', color: '#9c27b0', label: 'φ_h' }
+      ], 'ζ = z/L', 'φ');
+    }
+
+    function handleConversion() {
+      const profile = els.profile.value;
+      const mode = els.mode.value;
+      const val = parseFloat(els.input.value);
+
+      if (!Number.isFinite(val)) {
+        els.output.innerHTML = '<span class="error">❌ Invalid input</span>';
+        return;
+      }
+
+      try {
+        const guess = val > 0 ? 0.1 : (val < 0 ? -0.1 : 0.0001);
+        let zeta, result;
+
+        if (mode === 'rig_to_zeta') {
+          zeta = zeta_from_rig(val, profile, guess);
+          result = { 'Input Ri_g': val, zeta, Ri_b: ri_b(zeta, profile), phi_m: phi_m(zeta, profile), phi_h: phi_h(zeta, profile) };
+        } else if (mode === 'rib_to_zeta') {
+          zeta = zeta_from_rib(val, profile, guess);
+          result = { 'Input Ri_b': val, zeta, Ri_g: ri_g(zeta, profile), phi_m: phi_m(zeta, profile), phi_h: phi_h(zeta, profile) };
+        } else {
+          zeta = val;
+          result = { 'Input ζ': val, Ri_g: ri_g(zeta, profile), Ri_b: ri_b(zeta, profile), phi_m: phi_m(zeta, profile), phi_h: phi_h(zeta, profile) };
         }
 
-        // --- UI Wiring ---
-        const els = {
-            profile: document.getElementById('profile'),
-            regime: document.getElementById('regime'),
-            mode: document.getElementById('mode'),
-            input: document.getElementById('input'),
-            output: document.getElementById('output'),
-            refresh: document.getElementById('refresh'),
-            csv: document.getElementById('csv'),
-            convert: document.getElementById('convert')
-        };
+        const formatted = {};
+        for (const key in result) formatted[key] = parseFloat(result[key].toFixed(6));
+        els.output.textContent = JSON.stringify(formatted, null, 2);
+      } catch (e) {
+        els.output.innerHTML = `<span class="error">❌ Error: ${e.message}</span>`;
+      }
+    }
 
-        let currentData = [];
+    els.refresh.onclick = render;
+    els.profile.onchange = render;
+    els.regime.onchange = render;
+    els.z_over_z0.onchange = render;
+    els.csv.onclick = () => exportCSV(currentData, els.profile.value, els.regime.value);
+    els.convert.onclick = handleConversion;
+    els.input.onkeypress = (e) => { if (e.key === 'Enter') handleConversion(); };
 
-        function render() {
-            const prof = els.profile.value;
-            const reg = els.regime.value;
-            currentData = generateReferenceData(prof, reg);
-
-            drawLineChart('#chart_richardson', currentData, [
-                { key: 'Ri_g', color: '#8884d8', label: 'Ri_g' },
-                { key: 'Ri_b', color: '#82ca9d', label: 'Ri_b' }
-            ], 'ζ = z/L', 'Richardson Number');
-
-            drawLineChart('#chart_phi', currentData, [
-                { key: 'phi_m', color: '#ff7300', label: 'φ_m' },
-                { key: 'phi_h', color: '#d84aff', label: 'φ_h' }
-            ], 'ζ = z/L', 'φ');
-        }
-
-        els.refresh.onclick = render;
-        els.profile.onchange = render;
-        els.regime.onchange = render;
-
-        els.csv.onclick = () => exportCSV(currentData);
-
-        els.convert.onclick = () => {
-            const prof = els.profile.value;
-            const mode = els.mode.value;
-            const val = parseFloat(els.input.value);
-            if (Number.isNaN(val)) { els.output.textContent = 'Invalid input'; return; }
-
-            let z, out;
-            try {
-                // Initial guess based on sign of input
-                const guess = val > 0 ? 0.1 : (val < 0 ? -0.1 : 0.0001);
-
-                if (mode === 'rig_to_zeta') {
-                    z = zeta_from_rig(val, prof, guess);
-                    out = { Ri_g_Input: val, zeta: z, Ri_b: ri_b(z, prof), phi_m: phi_m(z, prof), phi_h: phi_h(z, prof) };
-                } else if (mode === 'rib_to_zeta') {
-                    z = zeta_from_rib(val, prof, guess);
-                    out = { Ri_b_Input: val, zeta: z, Ri_g: ri_g(z, prof), phi_m: phi_m(z, prof), phi_h: phi_h(z, prof) };
-                } else {
-                    z = val;
-                    out = { zeta_Input: z, Ri_g: ri_g(z, prof), Ri_b: ri_b(z, prof), phi_m: phi_m(z, prof), phi_h: phi_h(z, prof) };
-                }
-
-                // Format output to 6 decimal places for precision
-                const formattedOut = {};
-                for (const key in out) {
-                    formattedOut[key] = parseFloat(out[key]).toFixed(6);
-                }
-
-                els.output.textContent = JSON.stringify(formattedOut, null, 2);
-            } catch (e) {
-                els.output.textContent = `Conversion failed: ${e.message}`;
-            }
-        };
-
-        // Initial render
-        render();
-    </script>
+    render();
+  </script>
 </body>
 
 </html>
