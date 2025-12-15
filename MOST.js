@@ -72,6 +72,10 @@ const MOSTStabilityTool = () => {
     SINGULARITY_TOL: 1e-10, // Tolerance for singularity avoidance
     ZETA_BOUNDS: [-10, 10] // Physical bounds for dimensionless height
   };
+  // Add canonical roughness ratio (z/z0), e.g., z=10 m, z0=0.01 m → 1000
+  const SURFACE_PARAMS = {
+    Z_OVER_Z0: 1000
+  };
 
   // ============================================================================
   // CORE PHYSICS: STABILITY FUNCTIONS
@@ -238,11 +242,8 @@ const MOSTStabilityTool = () => {
   /**
    * Bulk Richardson number Ri_b(ζ).
    * 
-   * Integrated stability measure from surface to height z.
-   * 
-   * Ri_b ≈ ζ * [ln(z) - ψ_h(ζ)] / [ln(z) - ψ_m(ζ)]²
-   * 
-   * (Simplified form assuming z >> z₀, so ln(z/z₀) ≈ ln(z))
+   * Ri_b(ζ; z/z0) ≈ ζ * [ln(z/z0) - ψ_h(ζ)] / [ln(z/z0) - ψ_m(ζ)]²
+   * Assumes z >> z0; ln(z/z0) is treated as a constant per chosen z/z0.
    * 
    * Physical interpretation:
    * - More integrative than local Ri_g
@@ -254,12 +255,19 @@ const MOSTStabilityTool = () => {
    * @returns {number} Bulk Richardson number (dimensionless)
    */
   const ri_b = (zeta, prof) => {
+    // Avoid undefined ln near nonpositive ratios and near-neutral ζ artifacts
+    const ln_z_over_z0 = SURFACE_PARAMS.Z_OVER_Z0 > 0 ? Math.log(SURFACE_PARAMS.Z_OVER_Z0) : 0;
+    if (ln_z_over_z0 <= 0) return 0;
+    if (Math.abs(zeta) < NUMERICAL_PARAMS.SINGULARITY_TOL) return 0;
+
     const psim = psi_m(zeta, prof);
     const psih = psi_h(zeta, prof);
-    // Avoid division by very small numbers near neutral
-    const denominator = Math.pow(Math.log(zeta) - psim, 2);
+
+    const denomTerm = ln_z_over_z0 - psim;
+    const denominator = denomTerm * denomTerm;
     if (denominator < 1e-15) return 0;
-    return zeta * (Math.log(zeta) - psih) / denominator;
+
+    return zeta * (ln_z_over_z0 - psih) / denominator;
   };
 
   // ============================================================================
